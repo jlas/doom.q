@@ -1,10 +1,12 @@
-w:read1`:./doom1.wad
-
+/ Size of binary byte structs
 s_lump:16
 s_linedef:14
 s_sidedef:30
 s_vertex:4
 s_seg:12
+s_ssector:4
+s_node:28
+s_sector:26
 
 /
  * Read and convert bytes
@@ -20,6 +22,7 @@ r_chars:{"c"$x[y+ til z]}
 r_d:`s`us`i`c!(r_short;r_ushort;r_int;r_chars);
 r_o:`s`us`i!2 2 4;
 
+w:read1`:./doom1.wad
 
 ident:"c"$w[til 4];
 dirsize:r_int[w;4];
@@ -32,54 +35,47 @@ r_dir:{[dd;offset]
 lumps:r_dir each s_lump * til dirsize;
 lumps:`lumploc xasc flip `lumploc`lumpsize`lumpname!flip lumps;
 
-r_linedef:{[dd;offset]
- r_ushort[dd;] each offset + 2 * til 7}
-
-r_linedefs:{[w;start;size]
- x:r_linedef[w;] each start + s_linedef * til size div s_linedef;
- flip `v1`v2`flags`type`sector_tag`rsidedef`lsidedef!flip x}
-
+/
+ * Apply a generic data conversion to a bytes list according to a "spec" e.g.
+ * the spec (`s;`s;(`c;8)) converts two shorts and an 8 byte character array.
+ * @param {list} spec - a list of datatypes (keys in the r_d dict), optionally can
+ *  include a nested list with data type and data size (e.g. in case of chars)
+ * @param {bytes} dd - the bytes to convert
+ * @param {int} offset - offset into dd
+\
 r_any:{[spec;dd;offset]
  funcs:r_d each first each spec;
- offsets:offset + (+\) {$[1=count[x];r_o[x];last x]} each spec;
+ offsets:-1 _ offset + (+\) 0,{$[1=count[x];r_o[x];last x]} each spec;
  nchars:{$[1=count[x];::;last x]} each spec;
  funcs .' (count[spec]#enlist[enlist[dd]]),'{x where not null x} each offsets,'nchars}
 
-r_sidedef:{[dd;offset]
- (r_short[dd;offset];
- r_short[dd;offset+2];
- r_chars[dd;offset+4;8];
- r_chars[dd;offset+12;8];
- r_chars[dd;offset+20;8];
- r_ushort[dd;offset+28])}
+r_many:{[ufunc;usize;cols_;w;start;size]
+ flip cols_!flip ufunc[w;] each start + usize * til size div usize}
 
-r_sidedefs:{[w;start;size]
- x:r_sidedef[w;] each start + s_sidedef * til size div s_sidedef;
- flip `xoffset`yoffset`upper_texture`lower_texture`middle_texture`sector!flip x}
+r_linedef:r_any[7#`us;]
+r_linedefs:r_many[r_linedef;s_linedef;`v1`v2`flags`type`sector_tag`rsidedef`lsidedef;]
 
-r_vertex:{[dd;offset]
- r_short[dd;] each offset + 2 * til 2}
+r_sidedef:r_any[(`s;`s;(`c;8);(`c;8);(`c;8);`us);]
+r_sidedefs:r_many[r_sidedef;s_sidedef;`xoffset`yoffset`upper_texture`lower_texture`middle_texture`sector;]
 
-r_vertices:{[w;start;size]
- x:r_vertex[w;] each start + s_vertex * til size div s_vertex;
- flip `x`y!flip x}
+r_vertex:r_any[2#`s]
+r_vertices:r_many[r_vertex;s_vertex;`x`y;]
 
-r_seg:{[dd;offset]
- (r_ushort[dd;offset];
- r_ushort[dd;offset+2];
- r_short[dd;offset+4];
- r_ushort[dd;offset+6];
- r_short[dd;offset+8];
- r_short[dd;offset+10])}
+r_seg:r_any[`us`us`s`us`s`s;]
+r_segs:r_many[r_seg;s_seg;`v1`v2`angle`linedef`direction`offset;]
 
-r_segs:{[w;start;size]
- x:r_seg[w;] each start + s_seg * til size div s_seg;
- flip `v1`v2`angle`linedef`direction`offset!flip x}
+r_ssector:r_any[2#`s]
+r_ssectors:r_many[r_ssector;s_ssector;`numlines`firstline;]
+
+r_node:r_any[14#`s]
+r_nodes:r_many[r_node;s_node;`x`y`dx`dy`bb1top`bb1bottom`bb1left`bb1right`bb2top`bb2bottom`bb2left`bb2right`lchild`rchild;]
+
+r_sector:r_any[(`s;`s;(`c;8);(`c;8);`s;`us;`us)]
+r_sectors:r_many[r_sector;s_sector;`floorheight`ceilheight`floortexture`ceiltexture`lightlevel`special`tag;]
 
 r_level:{[w;lumps;name]
  idx:first exec i from lumps where lumpname like (name,"*");
- linedefs:r_linedefs[w;lumps[idx+2]`lumploc;lumps[idx+2]`lumpsize];
- sidedefs:r_sidedefs[w;lumps[idx+3]`lumploc;lumps[idx+3]`lumpsize];
- vertices:r_vertices[w;lumps[idx+4]`lumploc;lumps[idx+4]`lumpsize];
- segs:r_segs[w;lumps[idx+5]`lumploc;lumps[idx+5]`lumpsize];
- `linedefs`sidedefs`vertices`segs!(linedefs;sidedefs;vertices;segs)}
+ cols_:`linedefs`sidedefs`vertices`segs`ssectors`nodes`sectors;
+ / Lookup the r_<lumpname> function and apply it with starting offset and size
+ / Assumes lumps are laid out according to cols_
+ cols_!{[w;lumps;lumpname;idx] (`.[`$"r_",string lumpname])[w;lumps[idx]`lumploc;lumps[idx]`lumpsize]}[w;lumps;] .' cols_,'2 + idx + til count cols_}
