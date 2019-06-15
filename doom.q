@@ -118,3 +118,8 @@ linedefs:update two_sided:{any ML_TWOSIDED & (0b vs x)} each flags from linedefs
 segs:update sidedef:`sidedefs$?[direction=0;linedef.rsidedef;linedef.lsidedef] from segs
 segs:update bsidedef:`sidedefs$?[direction=1;linedef.rsidedef;linedef.lsidedef] from segs
 segs:update bsidedef:0Nj from segs where not linedef.two_sided
+
+/ Add sector reference into ssectors table
+/ See p_setup.c:P_GroupLines()
+map_ssectors:{seg:segs[x`firstline]; sidedefs[seg`sidedef]`sector}
+ssectors:`id xkey flip (flip 0!ssectors),enlist[`sector]!enlist map_ssectors each 0!ssectors;
