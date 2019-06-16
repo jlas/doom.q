@@ -89,11 +89,22 @@ r_level:{[w;lumps;name]
  call_lump_func:{[w;lumps;lumpname;idx] (`.[`$"r_",string lumpname])[w;lumps[idx]`lumploc;lumps[idx]`lumpsize]};
  cols_!call_lump_func[w;lumps;] .' cols_,'1 + idx + til count cols_}
 
-render_sector:{0N!"called sector";}
+render_add_line:{
+ 0N!"called add_line ",string x;
+ }
+
+render_sector:{
+ 0N!"called sector";
+ sub:ssectors[x];
+ render_add_line each value[sub`firstline] + til[sub`numlines];
+ }
 
 render_bsp_node:{[nodes;bspnum]
  0N!"called with ",string bspnum;
- $[bspnum<0;render_sector[bspnum];.z.s[nodes;nodes[bspnum]`lchild]]}
+ $[bspnum<0;
+  $[bspnum=-1;render_sector[0];render_sector[1h + 32767h + bspnum]];
+  / TODO recurse to correct side
+  .z.s[nodes;nodes[`int$bspnum]`lchild]]}
 
 t:r_level[w;lumps;"E1M1"];
 setd[t];
