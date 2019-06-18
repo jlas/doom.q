@@ -89,13 +89,27 @@ r_level:{[w;lumps;name]
  call_lump_func:{[w;lumps;lumpname;idx] (`.[`$"r_",string lumpname])[w;lumps[idx]`lumploc;lumps[idx]`lumpsize]};
  cols_!call_lump_func[w;lumps;] .' cols_,'1 + idx + til count cols_}
 
+render_clip_solid:{
+ 0N!"called clip_solid ",string[x], string[y];
+ }
+
+render_clip_pass:{
+ 0N!"called clip_pass ",string[x], string[y];
+ }
+
 render_add_line:{
- 0N!"called add_line ",string x;
+ 0N!"called add_line ",string each x;
+ back:select linedef.backsector.ceilheight, linedef.backsector.floorheight from segs[x];
+ $[(back[`ceilheight]<=frontsector[`floorheight]) or (back[`floorheight]>=frontsector[`ceilheight]);
+  .[render_clip_solid;segs[x]`x1`x2];
+  $[(back[`ceilheight]<>frontsector[`ceilheight]) or (back[`floorheight]<>frontsector[`floorheight]);
+   .[render_clip_pass;segs[x]`x1`x2];::]];
  }
 
 render_sector:{
  0N!"called sector";
  sub:ssectors[x];
+ frontsector::select from sectors[sub`sector];
  render_add_line each value[sub`firstline] + til[sub`numlines];
  }
 
@@ -125,6 +139,9 @@ ML_TWOSIDED:0b vs 4i;
 
 linedefs:update two_sided:{any ML_TWOSIDED & (0b vs x)} each flags from linedefs;
 
+/ Add front and backsectors to linedefs
+linedefs:update frontsector:rsidedef.sector, backsector:lsidedef.sector from linedefs
+
 / Add sidedef to segs
 segs:update sidedef:`sidedefs$?[direction=0;linedef.rsidedef;linedef.lsidedef] from segs
 segs:update bsidedef:`sidedefs$?[direction=1;linedef.rsidedef;linedef.lsidedef] from segs
@@ -134,3 +151,14 @@ segs:update bsidedef:0Nj from segs where not linedef.two_sided
 / See p_setup.c:P_GroupLines()
 map_ssectors:{seg:segs[x`firstline]; sidedefs[seg`sidedef]`sector}
 ssectors:`id xkey flip (flip 0!ssectors),enlist[`sector]!enlist map_ssectors each 0!ssectors;
+
+viewangle:0
+clipangle:1
+viewwidth:640
+focallen:atan[clipangle]*viewwidth%2
+
+/ Add angle to segs
+segs:update span:a1-a2 from update a1:atan each v1.y % v1.x, a2:atan each v2.y % v2.x from segs
+
+/ Add x to segs
+segs:update x1:focallen*atan[a1], x2:focallen*atan[a2] from segs
