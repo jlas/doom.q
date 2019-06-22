@@ -1,3 +1,7 @@
+/ DOOM Engine Resources
+/ https://doomwiki.org/wiki/WAD
+/ http://www.gamers.org/dhs/helpdocs/dmsp1666.html
+
 setd:{[d] ((set) .) each (enlist each key[t]),'(enlist each value[t])}
 
 / Size of binary byte structs
