@@ -113,12 +113,20 @@ render_sector:{
  render_add_line each value[sub`firstline] + til[sub`numlines];
  }
 
+/ https://math.stackexchange.com/a/274728
+point_on_side:{[x;y;node]
+ x1:node`x;
+ x2:node`dx;
+ y1:node`y;
+ y2:node`dy;
+ 0<(x-x1)*(y2-y1)-(y-y1)*(x2-x1)
+ }
+
 render_bsp_node:{[nodes;bspnum]
  0N!"called with ",string bspnum;
  $[bspnum<0;
-  $[bspnum=-1;render_sector[0];render_sector[1h + 32767h + bspnum]];
-  / TODO recurse to correct side
-  .z.s[nodes;nodes[`int$bspnum]`lchild]]}
+  $[bspnum=-1;render_sector[0];render_sector[1h + 32767h + bspnum]]; / Negate short
+  .z.s[nodes;nodes[`int$bspnum]`frontchild]]}
 
 t:r_level[w;lumps;"E1M1"];
 setd[t];
@@ -152,6 +160,9 @@ segs:update bsidedef:0Nj from segs where not linedef.two_sided
 map_ssectors:{seg:segs[x`firstline]; sidedefs[seg`sidedef]`sector}
 ssectors:`id xkey flip (flip 0!ssectors),enlist[`sector]!enlist map_ssectors each 0!ssectors;
 
+/ L1 start: 1056 -3616
+viewx:1056
+viewy:-3616
 viewangle:0
 clipangle:1
 viewwidth:640
@@ -162,3 +173,7 @@ segs:update span:a1-a2 from update a1:atan each v1.y % v1.x, a2:atan each v2.y %
 
 / Add x to segs
 segs:update x1:focallen*atan[a1], x2:focallen*atan[a2] from segs
+
+/ Calculate backside to current position
+nodes:nodes,'flip enlist[`backside]!enlist[value point_on_side[viewx;viewy;] each nodes];
+nodes:update frontchild:lchild|backside*rchild from nodes;
