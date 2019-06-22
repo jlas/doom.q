@@ -93,12 +93,20 @@ r_level:{[w;lumps;name]
  call_lump_func:{[w;lumps;lumpname;idx] (`.[`$"r_",string lumpname])[w;lumps[idx]`lumploc;lumps[idx]`lumpsize]};
  cols_!call_lump_func[w;lumps;] .' cols_,'1 + idx + til count cols_}
 
+\l sdl2.q
+
 render_clip_solid:{
  0N!"called clip_solid ",string[x], string[y];
+ x:`long$x+viewwidth%2;
+ y:`long$y+viewwidth%2;
+ {sdl_render_draw_line[x;z;y;z]}[x;y] each til 100;
  }
 
 render_clip_pass:{
  0N!"called clip_pass ",string[x], string[y];
+ x:`long$x+viewwidth%2;
+ y:`long$y+viewwidth%2;
+ {sdl_render_draw_line[x;z;y;z]}[x;y] each til 100;
  }
 
 render_add_line:{
