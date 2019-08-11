@@ -95,27 +95,29 @@ r_level:{[w;lumps;name]
 
 \l sdl2.q
 
-render_clip_solid:{
- 0N!"called clip_solid ",string[x], string[y];
- x:`long$x+viewwidth%2;
- y:`long$y+viewwidth%2;
- {sdl_render_draw_line[x;z;y;z]}[x;y] each til 100;
+render_clip_solid:{[seg]
+ x:`long$seg[`x1]+viewwidth%2;
+ y:`long$seg[`x2]+viewwidth%2;
+ 0N!"called clip_solid ",string[x], " ", string[y];
+ h:select `long$linedef.frontsector.ceilheight, `long$linedef.frontsector.floorheight from seg;
+ {sdl_render_draw_line[x;z;y;z]}[x;y] each value h;
  }
 
-render_clip_pass:{
- 0N!"called clip_pass ",string[x], string[y];
- x:`long$x+viewwidth%2;
- y:`long$y+viewwidth%2;
- {sdl_render_draw_line[x;z;y;z]}[x;y] each til 100;
+render_clip_pass:{[seg]
+ x:`long$seg[`x1]+viewwidth%2;
+ y:`long$seg[`x2]+viewwidth%2;
+ 0N!"called clip_pass ",string[x], " ", string[y];
+ h:select `long$linedef.frontsector.ceilheight, `long$linedef.frontsector.floorheight from seg;
+ {sdl_render_draw_line[x;z;y;z]}[x;y] each value h;
  }
 
 render_add_line:{
  0N!"called add_line ",string each x;
  back:select linedef.backsector.ceilheight, linedef.backsector.floorheight from segs[x];
  $[(back[`ceilheight]<=frontsector[`floorheight]) or (back[`floorheight]>=frontsector[`ceilheight]);
-  .[render_clip_solid;segs[x]`x1`x2];
+  render_clip_solid[segs[x]];
   $[(back[`ceilheight]<>frontsector[`ceilheight]) or (back[`floorheight]<>frontsector[`floorheight]);
-   .[render_clip_pass;segs[x]`x1`x2];::]];
+   render_clip_pass[segs[x]];::]];
  }
 
 render_sector:{
