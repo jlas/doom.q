@@ -175,19 +175,46 @@ map_ssectors:{seg:segs[x`firstline]; sidedefs[seg`sidedef]`sector}
 ssectors:`id xkey flip (flip 0!ssectors),enlist[`sector]!enlist map_ssectors each 0!ssectors;
 
 / L1 start: 1056 -3616
+rot:3.14159265359 % 6
+twopi:2 * 3.14159265359
 viewx:1056
 viewy:-3616
 viewangle:0
 clipangle:1
 viewwidth:640
-focallen:atan[clipangle]*viewwidth%2
+focallen:(viewwidth%2)%tan[clipangle]
 
-/ Add angle to segs
-segs:update span:a1-a2 from update a1:atan each v1.y % v1.x, a2:atan each v2.y % v2.x from segs
+update_segs:{
+ / Add angle to segs
+ segs::update span:a1-a2 from update a1:atan each (v1.y-viewy) % (v1.x-viewx),
+  a2:atan each (v2.y-viewy) % (v2.x-viewx) from segs;
+ / Add x to segs
+ segs::update x1:focallen*tan[a1-viewangle], x2:focallen*tan[a2-viewangle] from segs
+ }
 
-/ Add x to segs
-segs:update x1:focallen*atan[a1], x2:focallen*atan[a2] from segs
+update_nodes:{
+ / Calculate backside to current position
+ nodes::nodes,'flip enlist[`backside]!enlist[value point_on_side[viewx;viewy;] each nodes];
+ nodes::update frontchild:lchild|backside*rchild from nodes;
+ }
 
-/ Calculate backside to current position
-nodes:nodes,'flip enlist[`backside]!enlist[value point_on_side[viewx;viewy;] each nodes];
-nodes:update frontchild:lchild|backside*rchild from nodes;
+render_frame:{
+ 0N!viewangle,viewx,viewy;
+ sdl_render_clear[];
+ render_bsp_node[nodes;x];
+ sdl_render_present[];
+ }
+
+render_loop_:{
+ e:sdl_poll_event[];
+ if[0=e;::];
+ if[1=e;viewy+:sin(viewangle);viewx+:cos(viewangle)];
+ if[2=e;viewangle::(viewangle+rot) mod twopi];
+ if[3=e;viewy-:sin(viewangle);viewx-:cos(viewangle)];
+ if[4=e;viewangle::(viewangle-rot) mod twopi];
+ update_segs[];
+ update_nodes[];
+ render_frame[-1+count[nodes]]
+ }
+
+render_loop:{while[1;render_loop_[]]}

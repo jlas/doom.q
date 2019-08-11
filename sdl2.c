@@ -8,8 +8,7 @@ K sdl_create_window(K w, K h) {
   if(w->t!=-KJ||h->t!=-KJ)
     return krr("type");
 
-  window = SDL_CreateWindow("doom.q", SDL_WINDOWPOS_UNDEFINED,
-    SDL_WINDOWPOS_UNDEFINED, w->j, h->j, SDL_WINDOW_RESIZABLE);
+  window = SDL_CreateWindow("doom.q", 0, 0, w->j, h->j, SDL_WINDOW_RESIZABLE);
   if (!window) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't create window: %s\n", SDL_GetError());
     return kj(1);
@@ -27,6 +26,7 @@ K sdl_create_window_and_renderer(K w, K h) {
     return kj(1);
   }
 
+  SDL_RaiseWindow(window);
   return kj(0);
 }
 
@@ -40,7 +40,34 @@ K sdl_render_draw_line(K x1, K y1, K x2, K y2) {
     SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't draw line: %s\n", SDL_GetError());
     return kj(1);
   }
-  SDL_RenderPresent(renderer);
 
   return kj(0);
+}
+
+K sdl_poll_event() {
+  SDL_Event e;
+  if (SDL_PollEvent(&e)) {
+    if (e.type == SDL_KEYDOWN){
+      switch(e.key.keysym.sym) {
+        case SDLK_UP:
+          return kj((J)1);
+        case SDLK_RIGHT:
+          return kj((J)2);
+        case SDLK_DOWN:
+          return kj((J)3);
+        case SDLK_LEFT:
+          return kj((J)4);
+      }
+    }
+  }
+  return kj(0);
+}
+
+void sdl_render_present() {
+  SDL_RenderPresent(renderer);
+}
+
+void sdl_render_clear() {
+  SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+  SDL_RenderClear(renderer);
 }
