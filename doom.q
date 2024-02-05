@@ -4,6 +4,8 @@
 
 setd:{[d] ((set) .) each (enlist each key[t]),'(enlist each value[t])}
 
+cdr:{(-1*count[x]-1)#x}
+
 / Size of binary byte structs
 s_lump:16
 s_thing:10
@@ -95,10 +97,42 @@ r_level:{[w;lumps;name]
 
 \l sdl2.q
 
+
+/
+ * R_ClipSolidWallSegment
+ * test case: recur_solidsegs[2 7;recur_solidsegs[1 3;recur_solidsegs[6 10;solidsegs]]]
+\
+recur_solidsegs:{[newrange;solidsegs_]
+  if[0=count[solidsegs_];:solidsegs_];
+  first_:newrange[0];
+  start:first[solidsegs_];
+
+  / recur until we reach an open range
+  if[start[1]<first_-1;:enlist[first[solidsegs_]], .z.s[newrange;cdr solidsegs_]];
+
+  last_:newrange[1];
+
+  / new range starts before next
+  if[first_<start[0];
+    / new range is entirely visible
+    if[last_<start[0]-1;:enlist[newrange],solidsegs_];
+    / extend next range backward to the start of this one
+    next_:first[solidsegs_];
+    :enlist[(first_;next_[1])],cdr solidsegs_
+  ];
+
+  / new range is fully enclosed by next
+  if[last_<=start[1];:solidsegs_]
+
+  / new range starts in next but ends after
+  .z.s[(start[0];last_);cdr solidsegs_]
+ }
+
 render_clip_solid:{[seg]
  x:`long$seg[`x1]+viewwidth%2;
  y:`long$seg[`x2]+viewwidth%2;
- 0N!"called clip_solid ",string[x], " ", string[y];
+ solidsegs::recur_solidsegs[(x,y);solidsegs];
+//  0N!"called clip_solid ",string[x], " ", string[y];
  h:select `long$linedef.frontsector.ceilheight, `long$linedef.frontsector.floorheight from seg;
  {sdl_render_draw_line[x;z;y;z]}[x;y] each value h;
  }
@@ -106,13 +140,13 @@ render_clip_solid:{[seg]
 render_clip_pass:{[seg]
  x:`long$seg[`x1]+viewwidth%2;
  y:`long$seg[`x2]+viewwidth%2;
- 0N!"called clip_pass ",string[x], " ", string[y];
+//  0N!"called clip_pass ",string[x], " ", string[y];
  h:select `long$linedef.frontsector.ceilheight, `long$linedef.frontsector.floorheight from seg;
  {sdl_render_draw_line[x;z;y;z]}[x;y] each value h;
  }
 
 render_add_line:{
- 0N!"called add_line ",string each x;
+//  0N!"called add_line ",string each x;
  back:select linedef.backsector.ceilheight, linedef.backsector.floorheight from segs[x];
  $[(back[`ceilheight]<=frontsector[`floorheight]) or (back[`floorheight]>=frontsector[`ceilheight]);
   render_clip_solid[segs[x]];
@@ -121,7 +155,7 @@ render_add_line:{
  }
 
 render_sector:{
- 0N!"called sector";
+//  0N!"called sector";
  sub:ssectors[x];
  frontsector::select from sectors[sub`sector];
  render_add_line each value[sub`firstline] + til[sub`numlines];
@@ -137,10 +171,13 @@ point_on_side:{[x;y;node]
  }
 
 render_bsp_node:{[nodes;bspnum]
- 0N!"called with ",string bspnum;
- $[bspnum<0;
+ if[bspnum=0;:0N];
+//  0N!"called with ",string bspnum;
+ $[bspnum<=0; / Negative bspnum means it is a leaf
   $[bspnum=-1;render_sector[0];render_sector[1h + 32767h + bspnum]]; / Negate short
-  .z.s[nodes;nodes[`int$bspnum]`frontchild]]}
+  .z.s[nodes] each (nodes[`int$bspnum]`lchild;nodes[`int$bspnum]`rchild)]
+  // .z.s[nodes;nodes[`int$bspnum]`frontchild]]
+  }
 
 t:r_level[w;lumps;"E1M1"];
 setd[t];
@@ -176,26 +213,66 @@ ssectors:`id xkey flip (flip 0!ssectors),enlist[`sector]!enlist map_ssectors eac
 
 / L1 start: 1056 -3616
 rot:3.14159265359 % 6
-twopi:2 * 3.14159265359
+pi:3.14159265359
+twopi:2 * pi
 viewx:1056
 viewy:-3616
 viewangle:0
 clipangle:1
 viewwidth:640
 focallen:(viewwidth%2)%tan[clipangle]
+forwardmove:(25,50)
+solidsegs:()
+
+reset_solidsegs:{
+  solidsegs::((-0W; -1);(viewwidth; 0W))
+ }
 
 update_segs:{
  / Add angle to segs
  segs::update span:a1-a2 from update a1:atan each (v1.y-viewy) % (v1.x-viewx),
   a2:atan each (v2.y-viewy) % (v2.x-viewx) from segs;
  / Add x to segs
- segs::update x1:focallen*tan[a1-viewangle], x2:focallen*tan[a2-viewangle] from segs
+ segs::update x1:?[x1_<x2_;x1_;x2_], x2:?[x1_<x2_;x2_;x1_] from
+  update x1_:focallen*tan[a1-viewangle], x2_:focallen*tan[a2-viewangle] from segs;
+ }
+
+// point_to_angle:{[x,y]
+//   x:-viewx;
+//   y:-viewy;
+//   atan each (v2.y-viewy) % (v2.x-viewx)
+// }
+
+check_bbox2:{[top;bottom;left;right]
+  $[viewx<=left&viewy>=top;[top,right,bottom,left];
+    viewx<right&viewy>=top;[top,right,top,left];
+    viewx>=right&viewy>=top;[bottom,right,top,left];
+    viewx<=left&viewy>bottom;[top,left,bottom,left];
+    viewx>=right&viewy>bottom;[bottom,right,top,right];
+    viewx<=left&viewy<=bottom;[top,left,bottom,right];
+    viewx<right&viewy<=bottom;[bottom,left,bottom,right];
+    viewx>=right&viewy<=bottom;[bottom,left,top,right];
+    [-1,-1,-1,-1]
+  ]
+ }
+
+check_bbox:{
+  / backside
+  bb2:select bb2top, bb2bottom, bb2left, bb2right from nodes;
+  edgepts:`y1`x1`y2`x2!flip .'[check_bbox2;value each bb2];
+  angle:select a1:-1*viewangle + atan each (y1-viewy) % (x1-viewx),
+    a2:-1*viewangle + atan each (y2-viewy) % (x2-viewx) from edgepts;
+  angle: update span:a1-a2 from angle;
+  update bail1:span>=pi, bail2:a1>span+2*clipangle, bail3:-1*a2>span+2*clipangle,
+    a1:min[(a1;clipangle)], a2:max[(a2;-1*clipangle)] from angle;
+  flip update x1:focallen*tan[a1], x2:focallen*tan[a2] from angle
  }
 
 update_nodes:{
  / Calculate backside to current position
  nodes::nodes,'flip enlist[`backside]!enlist[value point_on_side[viewx;viewy;] each nodes];
  nodes::update frontchild:lchild|backside*rchild from nodes;
+//  nodes::update lchild:$[lchild=0;-0;lchild], rchild:$[rchild=0;-0;rchild] from nodes;
  }
 
 render_frame:{
@@ -208,13 +285,16 @@ render_frame:{
 render_loop_:{
  e:sdl_poll_event[];
  if[0=e;::];
- if[1=e;viewy+:sin(viewangle);viewx+:cos(viewangle)];
+ if[1=e;viewy+:forwardmove[0]*sin(viewangle);viewx+:forwardmove[0]*cos(viewangle)];
  if[2=e;viewangle::(viewangle+rot) mod twopi];
- if[3=e;viewy-:sin(viewangle);viewx-:cos(viewangle)];
+ if[3=e;viewy-:forwardmove[0]*sin(viewangle);viewx-:forwardmove[0]*cos(viewangle)];
  if[4=e;viewangle::(viewangle-rot) mod twopi];
  update_segs[];
  update_nodes[];
+ reset_solidsegs[];
  render_frame[-1+count[nodes]]
  }
+
+\c 40 120
 
 render_loop:{while[1;render_loop_[]]}
