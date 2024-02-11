@@ -16,6 +16,7 @@ s_seg:12
 s_ssector:4
 s_node:28
 s_sector:26
+s_mappatch:10
 
 /
  * Read and convert bytes
@@ -58,8 +59,11 @@ r_any:{[spec;dd;offset]
  nchars:{$[1=count[x];::;last x]} each spec;
  funcs .' (count[spec]#enlist[enlist[dd]]),'{x where not null x} each offsets,'nchars}
 
+r_many_:{[ufunc;usize;cols_;w;start;size]
+ r:flip cols_!flip ufunc[w;] each start + usize * til size div usize}
+
 r_many:{[ufunc;usize;cols_;w;start;size]
- r:flip cols_!flip ufunc[w;] each start + usize * til size div usize;
+ r:r_many_[ufunc;usize;cols_;w;start;size];
  / Make an id primary key
  `id xkey update id:i from r}
 
@@ -94,6 +98,23 @@ r_level:{[w;lumps;name]
  / Assumes lumps are laid out according to cols_
  call_lump_func:{[w;lumps;lumpname;idx] (`.[`$"r_",string lumpname])[w;lumps[idx]`lumploc;lumps[idx]`lumpsize]};
  cols_!call_lump_func[w;lumps;] .' cols_,'1 + idx + til count cols_}
+
+tex_loc:exec first lumploc from lumps where lumpname like "TEXTURE1";
+numtex:r_int[w;tex_loc];
+texoffset:tex_loc + r_int[w] each (tex_loc + 4 * 1 + til numtex);
+maptextures:flip `name`masked`width`height`columndirectory`patchcount!flip r_any[((`c;8);`i;`s;`s;`i;`us);w] each texoffset;
+maptextures:maptextures,'(flip enlist[`texoffset]!enlist texoffset);
+maptextures:update id:i from maptextures;
+
+r_patch:r_any[5#`s;]
+patches:{
+  t:r_many_[r_patch;s_mappatch;`originx`originy`patch`stepdir`colormap;w;22+x`texoffset;s_mappatch*x`patchcount];
+  update maptexure:x`id from t} each maptextures
+patches:(,/) patches
+
+pnames_loc:exec first lumploc from lumps where lumpname like "PNAMES*";
+numpatches:r_int[w;pnames_loc];
+pnames:r_many_[r_any[enlist[(`c;8)];];8;enlist `pname;w;4+pnames_loc;8*numpatches];
 
 \l sdl2.q
 
