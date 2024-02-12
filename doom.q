@@ -27,10 +27,11 @@ s_mappatch:10
 r_int:{0x0 sv reverse x[y + til 4]}
 r_short:{0x0 sv reverse x[y + til 2]}
 r_ushort:{0x0 sv (0x0000,reverse x[y + til 2])}
+r_uint8:{0x0 sv (3#0x0),1#x[y]}
 r_chars:{"c"$x[y+ til z]}
 
-r_d:`s`us`i`c!(r_short;r_ushort;r_int;r_chars);
-r_o:`s`us`i!2 2 4;
+r_d:`i8`s`us`i`c!(r_uint8;r_short;r_ushort;r_int;r_chars);
+r_o:`i8`s`us`i!1 2 2 4;
 
 w:read1`:./doom1.wad
 
@@ -39,6 +40,8 @@ dirsize:r_int[w;4];
 dirloc:r_int[w;8];
 dirdata:w dirloc + til dirsize * s_lump
 
+/ Extract the directory
+/ https://doomwiki.org/wiki/WAD#Directory
 r_dir:{[dd;offset]
  (r_int[dd;offset]; r_int[dd;offset+4]; r_chars[dd;offset+8;8])}[dirdata;]
 
@@ -99,6 +102,8 @@ r_level:{[w;lumps;name]
  call_lump_func:{[w;lumps;lumpname;idx] (`.[`$"r_",string lumpname])[w;lumps[idx]`lumploc;lumps[idx]`lumpsize]};
  cols_!call_lump_func[w;lumps;] .' cols_,'1 + idx + til count cols_}
 
+/ maptextures
+/ https://doomwiki.org/wiki/TEXTURE1_and_TEXTURE2
 tex_loc:exec first lumploc from lumps where lumpname like "TEXTURE1";
 numtex:r_int[w;tex_loc];
 texoffset:tex_loc + r_int[w] each (tex_loc + 4 * 1 + til numtex);
@@ -106,15 +111,38 @@ maptextures:flip `name`masked`width`height`columndirectory`patchcount!flip r_any
 maptextures:maptextures,'(flip enlist[`texoffset]!enlist texoffset);
 maptextures:update id:i from maptextures;
 
+/ mappatches
 r_patch:r_any[5#`s;]
-patches:{
+mappatches:{
   t:r_many_[r_patch;s_mappatch;`originx`originy`patch`stepdir`colormap;w;22+x`texoffset;s_mappatch*x`patchcount];
   update maptexure:x`id from t} each maptextures
-patches:(,/) patches
+mappatches:(,/) mappatches
 
+/ pnames
+/ https://doomwiki.org/wiki/PNAMES
 pnames_loc:exec first lumploc from lumps where lumpname like "PNAMES*";
 numpatches:r_int[w;pnames_loc];
 pnames:r_many_[r_any[enlist[(`c;8)];];8;enlist `pname;w;4+pnames_loc;8*numpatches];
+
+/ For some reason there is a pname that's not in lumps?
+pnames:select from pnames where pname in lumps`lumpname;
+
+/ posts
+/ https://doomwiki.org/wiki/Picture_format
+r_posts:{[pnameidx]
+  r_patch_header:r_any[4#`s;];
+  patchloc:first exec lumploc from lumps where lumpname like pnames[pnameidx]`pname;
+  header:r_patch_header[w;patchloc];
+  columnofs:patchloc + r_int[w] each patchloc + 8 + 4 * til first header;
+  r_post:r_any[3#`i8;];
+  post:flip `topdelta`length`unused!flip r_post[w;] each columnofs;
+  post:post,'flip enlist[`columnofs]!enlist[columnofs];
+  data:{x[`length]#_[3+x`columnofs;w]} each post;
+  post,'flip `patch`data!(count[data]#pnameidx;data)
+ }
+
+posts:(,/)r_posts each til count pnames
+
 
 \l sdl2.q
 
