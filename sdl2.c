@@ -44,6 +44,20 @@ K sdl_render_draw_line(K x1, K y1, K x2, K y2) {
   return kj(0);
 }
 
+K sdl_render_draw_point(K x, K y, K r, K g, K b) {
+  if(x->t!=-KJ||y->t!=-KJ||r->t!=-KJ||g->t!=-KJ||b->t!=-KJ)
+    return krr("type");
+
+  SDL_SetRenderDrawColor(renderer, r->j, g->j, b->j, SDL_ALPHA_OPAQUE);
+
+  if (SDL_RenderDrawPoint(renderer, x->j, y->j)) {
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't draw point: %s\n", SDL_GetError());
+    return kj(1);
+  }
+
+  return kj(0);
+}
+
 K sdl_poll_event() {
   SDL_Event e;
   if (SDL_PollEvent(&e)) {

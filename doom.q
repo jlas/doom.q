@@ -143,6 +143,12 @@ r_posts:{[pnameidx]
 
 posts:(,/)r_posts each til count pnames
 
+/ palettes
+/ https://doomwiki.org/wiki/PLAYPAL
+playpal_loc:first exec lumploc from lumps where lumpname like "PLAYPAL*";
+r_playpal:r_any[3#`i8;]
+playpal:r_many[r_playpal;3;`r`g`b;w;playpal_loc;3*256] / just take first palette for now
+
 
 \l sdl2.q
 
@@ -177,13 +183,26 @@ recur_solidsegs:{[newrange;solidsegs_]
   .z.s[(start[0];last_);cdr solidsegs_]
  }
 
+colfunc:{[y;x;post]
+  zip:(y+til[count[post]]),'value each (`long$) each playpal each (`long$) each post;
+  / need to add palette lookup
+  (sdl_render_draw_point[x] .) each zip;
+ }
+
+render_seg_loop:{[x1;x2;y]
+  r:x1 + til[x2-x1];
+  / just using random posts right now
+  (colfunc[y] .) each r,'enlist each posts[r]`data;
+ }
+
 render_clip_solid:{[seg]
  x:`long$seg[`x1]+viewwidth%2;
  y:`long$seg[`x2]+viewwidth%2;
  solidsegs::recur_solidsegs[(x,y);solidsegs];
 //  0N!"called clip_solid ",string[x], " ", string[y];
  h:select `long$linedef.frontsector.ceilheight, `long$linedef.frontsector.floorheight from seg;
- {sdl_render_draw_line[x;z;y;z]}[x;y] each value h;
+//  sdl_render_draw_line[x;z;y;z];
+ {render_seg_loop[x;y;z]}[x;y] each value h;
  }
 
 render_clip_pass:{[seg]
@@ -333,11 +352,13 @@ render_frame:{
 
 render_loop_:{
  e:sdl_poll_event[];
+ move:0b;
  if[0=e;::];
- if[1=e;viewy+:forwardmove[0]*sin(viewangle);viewx+:forwardmove[0]*cos(viewangle)];
- if[2=e;viewangle::(viewangle+rot) mod twopi];
- if[3=e;viewy-:forwardmove[0]*sin(viewangle);viewx-:forwardmove[0]*cos(viewangle)];
- if[4=e;viewangle::(viewangle-rot) mod twopi];
+ if[1=e;viewy+:forwardmove[0]*sin(viewangle);viewx+:forwardmove[0]*cos(viewangle);move:1b];
+ if[2=e;viewangle::(viewangle+rot) mod twopi;move:1b];
+ if[3=e;viewy-:forwardmove[0]*sin(viewangle);viewx-:forwardmove[0]*cos(viewangle);move:1b];
+ if[4=e;viewangle::(viewangle-rot) mod twopi;move:1b];
+ if[move=0b;:0b];
  update_segs[];
  update_nodes[];
  reset_solidsegs[];
