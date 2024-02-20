@@ -83,6 +83,7 @@ r_vertex:r_any[2#`s;]
 r_vertices:r_many[r_vertex;s_vertex;`x`y;]
 
 r_seg:r_any[`us`us`s`us`s`s;]
+/ seg angle is the angle b/w v1 and v2
 r_segs:r_many[r_seg;s_seg;`v1`v2`angle`linedef`direction`offset;]
 
 r_ssector:r_any[2#`s;]
@@ -153,6 +154,21 @@ playpal:r_many[r_playpal;3;`r`g`b;w;playpal_loc;3*256] / just take first palette
 \l sdl2.q
 
 
+/ L1 start: 1056 -3616
+rot:3.14159265359 % 6
+pi:3.14159265359
+twopi:2 * pi
+ang90:pi%2
+viewx:1056
+viewy:-3616
+viewangle:0
+clipangle:1
+viewwidth:640
+viewheight:480
+focallen:(viewwidth%2)%tan[clipangle]
+forwardmove:(25,50)
+solidsegs:()
+
 /
  * R_ClipSolidWallSegment
  * Use global vars to track the clip range as it simplifies implementation
@@ -199,26 +215,27 @@ recur_solidsegs:{[newrange]
   (rs_last_clip_start;rs_last_clip_end)
  }
 
-colfunc:{[y;x;post]
-  zip:(y+til[count[post]]),'value each (`long$) each playpal each (`long$) each post;
+colfunc:{[top;bottom;x;post]
+  post_:value each (`long$) each playpal each (`long$) each post;
+  zip:(top+til[min[(count[post_];bottom)]]),'post_;
   / need to add palette lookup
   (sdl_render_draw_point[x] .) each zip;
  }
 
-render_seg_loop:{[x1;x2;y]
+render_seg_loop:{[x1;x2;top;bottom]
   r:x1 + til[x2-x1];
   / just using random posts right now
-  (colfunc[y] .) each r,'enlist each posts[r]`data;
+  (colfunc[top;bottom] .) each r,'enlist each posts[r]`data;
  }
 
 render_clip_solid:{[seg]
- x:`long$seg[`x1]+viewwidth%2;
- y:`long$seg[`x2]+viewwidth%2;
- solidsegs::recur_solidsegs[(x,y);solidsegs];
+ x1:`long$seg[`x1]+viewwidth%2;
+ x2:`long$seg[`x2]+viewwidth%2;
+ recur_solidsegs[(x1,x2)];
 //  0N!"called clip_solid ",string[x], " ", string[y];
- h:select `long$linedef.frontsector.ceilheight, `long$linedef.frontsector.floorheight from seg;
+ h:select top:viewheight-`long$linedef.frontsector.ceilheight, bottom:viewheight-`long$linedef.frontsector.floorheight from seg;
 //  sdl_render_draw_line[x;z;y;z];
- {render_seg_loop[x;y;z]}[x;y] each value h;
+ render_seg_loop[x1;x2;h`top;h`bottom];
  }
 
 render_clip_pass:{[seg]
@@ -290,23 +307,13 @@ segs:update sidedef:`sidedefs$?[direction=0;linedef.rsidedef;linedef.lsidedef] f
 segs:update bsidedef:`sidedefs$?[direction=1;linedef.rsidedef;linedef.lsidedef] from segs
 segs:update bsidedef:0Nj from segs where not linedef.two_sided
 
+/ Convert segs angle
+segs:update angle:pi*?[angle>0;angle%32767;1+angle%-32768] from segs;
+
 / Add sector reference into ssectors table
 / See p_setup.c:P_GroupLines()
 map_ssectors:{seg:segs[x`firstline]; sidedefs[seg`sidedef]`sector}
 ssectors:`id xkey flip (flip 0!ssectors),enlist[`sector]!enlist map_ssectors each 0!ssectors;
-
-/ L1 start: 1056 -3616
-rot:3.14159265359 % 6
-pi:3.14159265359
-twopi:2 * pi
-viewx:1056
-viewy:-3616
-viewangle:0
-clipangle:1
-viewwidth:640
-focallen:(viewwidth%2)%tan[clipangle]
-forwardmove:(25,50)
-solidsegs:()
 
 reset_solidsegs:{
   solidsegs::((-0W; -1);(viewwidth; 0W))
@@ -314,8 +321,20 @@ reset_solidsegs:{
 
 update_segs:{
  / Add angle to segs
- segs::update span:a1-a2 from update a1:atan each (v1.y-viewy) % (v1.x-viewx),
+ / rw_normalangle: 90 + the seg angle
+ / distangle: the sine angle that determines distance to seg v1
+ / rw_centerangle: angle at which center of seg meets the viewplane
+ segs::update span:a1-a2 from update
+  rw_normalangle:angle + ang90,
+  a1:atan each (v1.y-viewy) % (v1.x-viewx),
   a2:atan each (v2.y-viewy) % (v2.x-viewx) from segs;
+ segs::update
+  rw_centerangle:ang90+viewangle-rw_normalangle,
+  distangle:ang90 - min[(ang90;abs[rw_normalangle - a1])],
+  hyp:(v1.x-viewx)%cos[a1] from segs;
+ segs::update
+  rw_offset:sidedef.xoffset+offset+hyp*sin[rw_normalangle - a1],
+  rw_distance:hyp*sin[distangle] from segs;
  / Add x to segs
  segs::update x1:?[x1_<x2_;x1_;x2_], x2:?[x1_<x2_;x2_;x1_] from
   update x1_:focallen*tan[a1-viewangle], x2_:focallen*tan[a2-viewangle] from segs;
@@ -381,6 +400,6 @@ render_loop_:{
  render_frame[-1+count[nodes]]
  }
 
-\c 40 120
+\c 40 160
 
 render_loop:{while[1;render_loop_[]]}
