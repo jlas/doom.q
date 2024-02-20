@@ -155,32 +155,48 @@ playpal:r_many[r_playpal;3;`r`g`b;w;playpal_loc;3*256] / just take first palette
 
 /
  * R_ClipSolidWallSegment
- * test case: recur_solidsegs[2 7;recur_solidsegs[1 3;recur_solidsegs[6 10;solidsegs]]]
+ * Use global vars to track the clip range as it simplifies implementation
+ * test case: recur_solidsegs_[2 7;recur_solidsegs_[1 3;recur_solidsegs_[6 10;solidsegs]]]
 \
-recur_solidsegs:{[newrange;solidsegs_]
+rs_last_clip_start:-1;
+rs_last_clip_end:-1;
+recur_solidsegs_:{[newrange;solidsegs_]
   if[0=count[solidsegs_];:solidsegs_];
-  first_:newrange[0];
-  start:first[solidsegs_];
+  newstart:newrange[0];
+  next_:first[solidsegs_];
 
   / recur until we reach an open range
-  if[start[1]<first_-1;:enlist[first[solidsegs_]], .z.s[newrange;cdr solidsegs_]];
+  if[next_[1]<newstart-1;:enlist[first[solidsegs_]], .z.s[newrange;cdr solidsegs_]];
 
-  last_:newrange[1];
+  newend:newrange[1];
 
   / new range starts before next
-  if[first_<start[0];
-    / new range is entirely visible
-    if[last_<start[0]-1;:enlist[newrange],solidsegs_];
+  if[newstart<next_[0];
+    / take max in case of extension of previous clip range (last line)
+    rs_last_clip_start::max[(rs_last_clip_start;newstart)];
+    / new range ends before next starts i.e. is entirely visible
+    if[newend<next_[0]-1;
+      rs_last_clip_end::newend;
+      :enlist[newrange],solidsegs_];
     / extend next range backward to the start of this one
-    next_:first[solidsegs_];
-    :enlist[(first_;next_[1])],cdr solidsegs_
+    rs_last_clip_end::next_[0];
+    :enlist[(newstart;next_[1])],cdr solidsegs_
   ];
 
   / new range is fully enclosed by next
-  if[last_<=start[1];:solidsegs_]
+  if[newend<=next_[1];:solidsegs_];
 
   / new range starts in next but ends after
-  .z.s[(start[0];last_);cdr solidsegs_]
+  rs_last_clip_start::next_[1];
+  .z.s[(next_[0];newend);cdr solidsegs_]
+ }
+
+/ Insert new clip range and return range clipped
+recur_solidsegs:{[newrange]
+  rs_last_clip_start::-1;
+  rs_last_clip_end::-1;
+  solidsegs::recur_solidsegs_[newrange;solidsegs];
+  (rs_last_clip_start;rs_last_clip_end)
  }
 
 colfunc:{[y;x;post]
