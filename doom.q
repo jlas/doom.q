@@ -126,7 +126,7 @@ numpatches:r_int[w;pnames_loc];
 pnames:r_many_[r_any[enlist[(`c;8)];];8;enlist `pname;w;4+pnames_loc;8*numpatches];
 
 / For some reason there is a pname that's not in lumps?
-pnames:select from pnames where pname in lumps`lumpname;
+pnames:`id xkey update id:i from select from pnames where pname in lumps`lumpname;
 
 / posts
 / https://doomwiki.org/wiki/Picture_format
@@ -142,7 +142,9 @@ r_posts:{[pnameidx]
   post,'flip `patch`data!(count[data]#pnameidx;data)
  }
 
-posts:(,/)r_posts each til count pnames
+posts:(,/)r_posts each til count pnames;
+/ add fk to pnames
+posts:update patch:`pnames$patch from posts;
 
 / palettes
 / https://doomwiki.org/wiki/PLAYPAL
@@ -222,20 +224,30 @@ colfunc:{[top;bottom;x;post]
   (sdl_render_draw_point[x] .) each zip;
  }
 
-render_seg_loop:{[x1;x2;top;bottom]
+render_seg_loop:{[x1;x2;top;bottom;posts_]
   r:x1 + til[x2-x1];
   / just using random posts right now
-  (colfunc[top;bottom] .) each r,'enlist each posts[r]`data;
+  (colfunc[top;bottom] .) each r,'enlist each posts_[r]`data;
  }
 
 render_clip_solid:{[seg]
- x1:`long$seg[`x1]+viewwidth%2;
- x2:`long$seg[`x2]+viewwidth%2;
- recur_solidsegs[(x1,x2)];
+ ox1:`long$seg[`x1]+viewwidth%2;
+ ox2:`long$seg[`x2]+viewwidth%2;
+ / cliprange is the horizontal range in the viewport that has not already been rendered
+ cliprange:recur_solidsegs[(ox1,ox2)];
+ x1:cliprange[0];
+ x2:cliprange[1];
+ / does not cross a pixel so bail
+ if[x1=x2;:];
+ midtexture:sidedefs[seg`sidedef]`middle_texture;
+ / no texture so bail
+ if[midtexture[0]="-";:];
+ posts_:select from posts where patch.pname like midtexture;
 //  0N!"called clip_solid ",string[x], " ", string[y];
- h:select top:viewheight-`long$linedef.frontsector.ceilheight, bottom:viewheight-`long$linedef.frontsector.floorheight from seg;
+ h:select top:viewheight-`long$linedef.frontsector.ceilheight,
+  bottom:viewheight-`long$linedef.frontsector.floorheight from seg;
 //  sdl_render_draw_line[x;z;y;z];
- render_seg_loop[x1;x2;h`top;h`bottom];
+ render_seg_loop[x1;x2;h`top;h`bottom;posts_];
  }
 
 render_clip_pass:{[seg]
