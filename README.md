@@ -1,6 +1,6 @@
 # doom.q
 
-This is a port of the DOOM source code to kdb+/q, specifically using https://github.com/chocolate-doom/chocolate-doom as reference.
+This is a DOOM source port to kdb+/q, using https://github.com/chocolate-doom/chocolate-doom as reference.
 
 # Status
 
@@ -8,7 +8,9 @@ In progress. Currently working on texture rendering.
 
 # Running
 
-Build the sdl2.so then run
+- Build the sdl2.so
+- Place WAD file at `doom1.wad`
+- Run:
 
 ```
 $ q doom.q
