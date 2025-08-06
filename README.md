@@ -1,4 +1,21 @@
-# Building the sdl2.so on MacOS
+# doom.q
+
+This is a port of the DOOM source code to kdb+/q, specifically using https://github.com/chocolate-doom/chocolate-doom as reference.
+
+# Status
+
+In progress. Currently working on texture rendering.
+
+# Running
+
+Build the sdl2.so then run
+
+```
+$ q doom.q
+q)render_loop[]
+```
+
+## Building the sdl2.so on MacOS
 
 - Install sdl2 with brew: `brew install sdl2`
 - Use `brew info sdl2` to get the installation directory of SDL2
